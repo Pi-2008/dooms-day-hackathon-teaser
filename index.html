@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>All will be revealed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Orbitron:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* ===== PLACEMENT CONTROLS — edit these ===== */
+    --content-x:50%;          /* text + countdown, horizontal: 0% = left … 100% = right */
+    --content-y:76%;          /* text + countdown, vertical: 0% = top … 100% = bottom */
+    --content-scale:1;        /* size of text + countdown (e.g. 0.85 or 1.2) */
+    --bg-fit:contain;         /* contain = whole image visible, edges fade to dark; cover = fill screen (crops) */
+    /* Quick test without editing: index.html?x=50&y=75&scale=1&fit=cover */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#05040a}
+  body{
+    position:relative;
+    background:#05040a;
+    color:#f3ecff;
+    font-family:"Cinzel",Georgia,"Times New Roman",serif;
+    touch-action:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  /* ---- background: whole image; its sides fade into darkness (box is sized + masked by JS) ---- */
+  .bg-main{position:absolute;inset:0;background:url("asset/BG.jpg") center/contain no-repeat;pointer-events:none}
+
+
+  canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  #flare{z-index:2;mix-blend-mode:screen}
+
+  main{
+    position:absolute;z-index:1;
+    left:var(--content-x);top:var(--content-y);
+    transform:translate(-50%,-50%) scale(var(--content-scale));
+    width:max-content;max-width:calc(100vw - 2rem);
+    display:flex;flex-direction:column;align-items:center;
+    gap:clamp(.7rem,2.6vh,1.6rem);text-align:center;
+  }
+  h1{
+    font-weight:400;
+    font-size:clamp(.8rem,2.1vw,1.4rem);
+    letter-spacing:.35em;text-transform:uppercase;
+    padding-left:.35em;
+    color:#b8ffd0;
+    text-shadow:0 0 8px rgba(80,255,140,.7),0 0 24px rgba(40,220,100,.45),0 2px 14px rgba(0,0,0,.55);
+    animation:breathe 5s ease-in-out infinite;
+  }
+  #timer{
+    font-family:"Orbitron","Cinzel",ui-monospace,monospace;
+    font-weight:500;
+    font-size:clamp(1.5rem,min(6vw,9vh),4.2rem);
+    letter-spacing:.06em;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+    color:#5dff8f;
+    text-shadow:0 0 6px rgba(93,255,143,.85),0 0 22px rgba(40,230,110,.6),0 0 48px rgba(20,200,90,.4),0 2px 16px rgba(0,0,0,.5);
+    display:flex;align-items:flex-start;justify-content:center;
+  }
+  #timer .unit{display:flex;flex-direction:column;align-items:center}
+  #timer .num,#timer .sep{line-height:1}
+  #timer .sep{opacity:.6;padding:0 .12em;animation:pulse 1s steps(1) infinite}
+  #timer .lbl{
+    font-family:"Cinzel",Georgia,serif;font-weight:600;
+    font-size:max(.6rem,.17em);letter-spacing:.3em;padding-left:.3em;
+    text-transform:uppercase;margin-top:.6em;color:#8dffb4;
+    text-shadow:0 0 6px rgba(93,255,143,.8),0 0 16px rgba(40,230,110,.5),0 1px 8px rgba(0,0,0,.5);
+  }
+
+  /* ---- side photo carousels (asset/1, 2, 3 ...) ---- */
+  .col{position:absolute;z-index:1;top:0;bottom:0;width:clamp(120px,19vw,300px);overflow:hidden;
+    user-select:none;-webkit-user-select:none;cursor:grab}
+  .col.l{left:1.5vw}.col.r{right:1.5vw}
+  .col:active{cursor:grabbing}
+  .item{position:absolute;left:0;top:0;width:100%;will-change:transform,opacity,filter;cursor:pointer;backface-visibility:hidden}
+  .item img{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none;
+    -webkit-mask-image:linear-gradient(to right,transparent,#000 7%,#000 93%,transparent),linear-gradient(to bottom,transparent,#000 5%,#000 95%,transparent);
+    -webkit-mask-composite:source-in;
+    mask-image:linear-gradient(to right,transparent,#000 7%,#000 93%,transparent),linear-gradient(to bottom,transparent,#000 5%,#000 95%,transparent);
+    mask-composite:intersect}
+  .strip{display:none}
+  /* ---- MOBILE: timer on top, one horizontal carousel under it, bg image below ---- */
+  @media (max-width:700px){
+    :root{--content-y:max(17vh,8.5rem);--strip-h:clamp(150px,26vh,230px)}
+    .col{display:none}
+    .strip{display:block;position:absolute;z-index:1;left:0;right:0;
+      top:calc(var(--content-y) + 4.6rem);height:var(--strip-h);overflow:hidden;
+      user-select:none;-webkit-user-select:none;cursor:grab}
+    .strip:active{cursor:grabbing}
+  }
+
+  /* ---- enlarged photo ---- */
+  #lb{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;
+    background:rgba(3,2,8,.84);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    opacity:0;visibility:hidden;pointer-events:none;transition:opacity .45s ease,visibility 0s .45s;cursor:zoom-out}
+  #lb.on{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .45s ease}
+  #lb img{max-width:92vw;max-height:90vh;object-fit:contain;
+    box-shadow:0 0 60px rgba(60,255,140,.25),0 10px 50px rgba(0,0,0,.6);
+    transition:transform .6s cubic-bezier(.2,.8,.2,1),opacity .5s ease}
+  #mute{
+    position:absolute;z-index:4;
+    top:max(1rem,env(safe-area-inset-top));right:max(1rem,env(safe-area-inset-right));
+    height:46px;padding:0 1.1rem 0 .9rem;border-radius:23px;
+    display:flex;align-items:center;gap:.55rem;cursor:pointer;
+    font-family:"Cinzel",Georgia,serif;font-weight:600;font-size:.8rem;letter-spacing:.18em;text-transform:uppercase;
+    color:#5dff8f;background:rgba(5,25,15,.45);
+    border:1px solid rgba(93,255,143,.45);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    box-shadow:0 0 14px rgba(40,230,110,.35);
+    transition:box-shadow .25s,background .25s;
+  }
+  #mute:hover,#mute:focus-visible{background:rgba(10,50,30,.6);box-shadow:0 0 22px rgba(93,255,143,.7);outline:none}
+  #mute svg{flex:none;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  #mute .txt{line-height:1;padding-top:.1em}
+  #mute .off{display:none}
+  #mute.muted .on{display:none}
+  #mute.muted .off{display:block}
+  @keyframes breathe{0%,100%{opacity:.85}50%{opacity:1}}
+  @keyframes pulse{0%,100%{opacity:.6}50%{opacity:.25}}
+  @media (prefers-reduced-motion:reduce){h1,#timer .sep{animation:none}}
+</style>
+</head>
+<body>
+  <div class="bg-main" aria-hidden="true"></div>
+
+  <button id="mute" type="button" aria-label="Mute music" aria-pressed="false">
+    <svg class="on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+    <svg class="off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+    <span class="txt" id="muteTxt">Mute</span>
+  </button>
+
+  <div class="col l" id="colL"></div>
+  <div class="col r" id="colR"></div>
+  <div class="strip" id="strip"></div>
+
+  <main>
+    <h1>All will be revealed in</h1>
+    <div id="timer" role="timer" aria-live="off">
+      <div class="unit"><span class="num" id="h">00</span><span class="lbl">hrs</span></div>
+      <span class="sep">:</span>
+      <div class="unit"><span class="num" id="m">00</span><span class="lbl">min</span></div>
+      <span class="sep">:</span>
+      <div class="unit"><span class="num" id="s">00</span><span class="lbl">sec</span></div>
+    </div>
+  </main>
+
+  <canvas id="flare" aria-hidden="true"></canvas>
+  <div id="lb" aria-hidden="true"><img alt=""></div>
+  <audio id="bgm" src="asset/music.mp3" loop preload="auto" autoplay playsinline></audio>
+
+<script>
+/* ===== placement via URL (optional): ?x=50&y=40&scale=1.1&bg=50%25%2030%25 ===== */
+(function () {
+  var q = new URLSearchParams(location.search), r = document.documentElement.style;
+  if (q.get("x"))     r.setProperty("--content-x", parseFloat(q.get("x")) + "%");
+  if (q.get("y"))     r.setProperty("--content-y", parseFloat(q.get("y")) + "%");
+  if (q.get("scale")) r.setProperty("--content-scale", parseFloat(q.get("scale")));
+  if (q.get("bg"))    r.setProperty("--bg-position", q.get("bg"));
+  if (q.get("fit"))   r.setProperty("--bg-fit", q.get("fit"));
+})();
+
+/* ===== Countdown + music ===== */
+(function () {
+  // 25 November 2026, 12:00 PM IST (UTC+05:30)
+  var TARGET = Date.parse("2026-11-25T12:00:00+05:30");
+  var hEl = document.getElementById("h"),
+      mEl = document.getElementById("m"),
+      sEl = document.getElementById("s");
+
+  function pad(n){ return n < 10 ? "0" + n : String(n); }
+
+  function tick(){
+    var diff = Math.max(0, Math.floor((TARGET - Date.now()) / 1000));
+    hEl.textContent = pad(Math.floor(diff / 3600));
+    mEl.textContent = pad(Math.floor(diff % 3600 / 60));
+    sEl.textContent = pad(diff % 60);
+  }
+  tick();
+  setInterval(tick, 250);
+
+  var audio = document.getElementById("bgm"),
+      btn = document.getElementById("mute");
+  audio.volume = 0.6;
+
+  function setMuted(m){
+    audio.muted = m;
+    btn.classList.toggle("muted", m);
+    btn.setAttribute("aria-pressed", String(m));
+    btn.setAttribute("aria-label", m ? "Unmute music" : "Mute music");
+    document.getElementById("muteTxt").textContent = m ? "Unmute" : "Mute";
+  }
+  setMuted(false);
+
+  var started = false, silent = false;
+  function tryPlay(){
+    var p = audio.play();
+    if (p && p.then) {
+      p.then(function(){ if (!audio.muted) { started = true; removeGestureListeners(); } })
+       .catch(function(){
+         // autoplay with sound was blocked: run silently, and unmute on the very first interaction
+         if (!silent) { silent = true; setMuted(true); var q = audio.play(); if (q && q.catch) q.catch(function(){}); }
+       });
+    }
+  }
+  function unlock(){            // runs inside a user gesture
+    silent = false; setMuted(false);
+    var p = audio.play();
+    if (p && p.then) p.then(function(){ started = true; removeGestureListeners(); }).catch(function(){});
+  }
+  var events = ["pointerdown","mousedown","touchstart","touchend","keydown","click"];
+  function onGesture(e){
+    if (started) return;
+    if (btn.contains(e.target)) return;
+    unlock();
+  }
+  function removeGestureListeners(){
+    events.forEach(function(ev){ document.removeEventListener(ev, onGesture, true); });
+  }
+  events.forEach(function(ev){ document.addEventListener(ev, onGesture, true); });
+  tryPlay();
+  audio.addEventListener("canplay", function(){ if (audio.paused) tryPlay(); });
+  window.addEventListener("pageshow", function(){ if (audio.paused) tryPlay(); });
+  window.addEventListener("load", function(){ if (audio.paused) tryPlay(); });
+
+  btn.addEventListener("click", function(){
+    if (!started) { unlock(); return; }
+    setMuted(!audio.muted);
+  });
+})();
+
+
+/* ===== Side carousels: asset/1, 2, 3 ... (any count; jpg/jpeg/png/webp) =====
+   Odd numbers drift down the left, even numbers drift up the right, on their own.
+   Scroll / swipe / drag to move them yourself; click a photo to enlarge it.
+   Numbering is scanned until 3 numbers in a row are missing, and re-scanned every 30s. */
+(function () {
+  var exts = ["jpg", "jpeg", "png", "webp", "JPG", "JPEG", "PNG"], found = {}, MAXMISS = 3, LIMIT = 500;
+  var AUTO = 26;                                   // px/s drift speed
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cols = {
+    l: { el: document.getElementById("colL"), dir: 1,  off: 0, nums: [], tiles: [], step: 0, h: 0, total: 0 },
+    r: { el: document.getElementById("colR"), dir: -1, off: 0, nums: [], tiles: [], step: 0, h: 0, total: 0 },
+    s: { el: document.getElementById("strip"), dir: -1, off: 0, nums: [], tiles: [], step: 0, h: 0, total: 0 }   // mobile: one horizontal strip with every photo
+  };
+  var MQ = window.matchMedia("(max-width:700px)"), mob = function () { return MQ.matches; };
+  var added = {}, userVel = 0, paused = false, H = window.innerHeight, W = window.innerWidth;
+
+  /* ---- discover files ---- */
+  function probe(n, i, cb) {
+    if (found[n]) return cb(true);
+    if (i >= exts.length) return cb(false);
+    var im = new Image();
+    im.onload = function () { found[n] = im.src; cb(true); };
+    im.onerror = function () { probe(n, i + 1, cb); };
+    im.src = "asset/" + n + "." + exts[i];
+  }
+  function scan() {
+    var n = 1, miss = 0, dirty = false;
+    (function step() {
+      if (miss >= MAXMISS || n > LIMIT) { if (dirty) rebuild(); return; }
+      probe(n, 0, function (ok) {
+        if (ok) {
+          miss = 0;
+          if (!added[n]) { added[n] = 1; var side = n % 2 ? "l" : "r"; cols[side].nums.push(n); cols[side].nums.sort(function (x, y) { return x - y; }); cols.s.nums.push(n); cols.s.nums.sort(function (x, y) { return x - y; }); dirty = true; }
+        } else miss++;
+        n++; step();
+      });
+    })();
+  }
+
+  /* ---- build tiles (repeated as needed so the loop always fills the screen) ---- */
+  function build(c) {
+    c.el.innerHTML = ""; c.tiles = [];
+    var n = c.nums.length; if (!n) return;
+    var horiz = c === cols.s, span = horiz ? c.el.clientHeight : c.el.clientWidth;
+    if (!span) return;
+    c.h = horiz ? span * .72 : span * 1.5; c.step = c.h * 1.12;     // c.h = tile length along the scroll axis
+    var need = Math.ceil(((horiz ? W : H) + 2 * c.step) / c.step), K = n * Math.ceil(Math.max(need, n) / n);
+    c.total = K * c.step;
+    for (var i = 0; i < K; i++) {
+      var d = document.createElement("div"), im = new Image();
+      d.className = "item";
+      if (horiz) { d.style.width = c.h + "px"; d.style.height = "100%"; } else d.style.height = c.h + "px";
+      im.src = found[c.nums[i % n]]; im.alt = ""; im.draggable = false;
+      d.appendChild(im); c.el.appendChild(d); c.tiles.push(d);
+    }
+  }
+  function rebuild() {
+    H = window.innerHeight; W = window.innerWidth;
+    var m = mob();
+    [cols.l, cols.r, cols.s].forEach(function (c) {
+      if (m === (c === cols.s)) build(c); else { c.el.innerHTML = ""; c.tiles = []; }
+    });
+  }
+  window.addEventListener("resize", rebuild);
+
+  /* ---- user scroll / drag ---- */
+  window.addEventListener("wheel", function (e) {
+    if (paused) return;
+    userVel = Math.max(-1800, Math.min(1800, userVel - e.deltaY * 1.4));
+  }, { passive: true });
+
+  var drag = null;
+  function down(e) {
+    if (paused) return;
+    drag = { y: mob() ? e.clientX : e.clientY, t: performance.now(), moved: 0, target: e.target.closest ? e.target.closest(".item") : null, v: 0 };
+    userVel = 0;
+  }
+  [cols.l.el, cols.r.el, cols.s.el].forEach(function (el) { el.addEventListener("pointerdown", down); });
+  window.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var now = performance.now(), dy = (mob() ? e.clientX : e.clientY) - drag.y, dt = Math.max(1, now - drag.t) / 1000;
+    drag.moved += Math.abs(dy); drag.v = .6 * drag.v + .4 * (dy / dt);
+    drag.y = mob() ? e.clientX : e.clientY; drag.t = now;
+    if (drag.moved > 6) { cols.l.off += dy; cols.r.off += dy; cols.s.off += dy; }
+  }, { passive: true });
+  function up() {
+    if (!drag) return;
+    var d = drag; drag = null;
+    if (d.moved <= 6 && d.target) openLb(d.target.querySelector("img"));
+    else userVel = Math.max(-2200, Math.min(2200, d.v));
+  }
+  window.addEventListener("pointerup", up, { passive: true });
+  window.addEventListener("pointercancel", function () { drag = null; }, { passive: true });
+
+  /* ---- enlarge on click ---- */
+  var lb = document.getElementById("lb"), lbImg = lb.querySelector("img");
+  function openLb(img) {
+    if (!img) return;
+    var r = img.getBoundingClientRect();
+    paused = true;
+    lbImg.style.transition = "none"; lbImg.style.transform = "none"; lbImg.style.opacity = "0";
+    lbImg.onload = null; lbImg.src = img.src;
+    lb.classList.add("on");
+    function go() {
+      var f = lbImg.getBoundingClientRect();
+      if (!f.width) { lbImg.style.transition = ""; lbImg.style.opacity = "1"; return; }
+      var sc = r.width / f.width;
+      var dx = (r.left + r.width / 2) - (f.left + f.width / 2), dy = (r.top + r.height / 2) - (f.top + f.height / 2);
+      lbImg.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + sc + ")";
+      lbImg.style.opacity = ".35";
+      void lbImg.offsetWidth;
+      lbImg.style.transition = ""; lbImg.style.transform = "none"; lbImg.style.opacity = "1";
+    }
+    if (lbImg.complete && lbImg.naturalWidth) go(); else lbImg.onload = go;
+  }
+  function closeLb() { lb.classList.remove("on"); paused = false; }
+  lb.addEventListener("click", closeLb);
+  window.addEventListener("keydown", function (e) { if (e.key === "Escape") closeLb(); });
+
+  /* ---- animation: the distortion happens toward the top and bottom of each column ---- */
+  var last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    var dt = Math.min(.05, (now - last) / 1000); last = now;
+    if (document.hidden) return;
+    var t = now / 1000, speed = reduce ? AUTO * .25 : AUTO;
+    if (!paused && !drag) { userVel *= Math.exp(-dt * 2.2); if (Math.abs(userVel) < 1) userVel = 0; }
+    ["l", "r", "s"].forEach(function (k) {
+      var c = cols[k]; if (!c.tiles.length) return;
+      var horiz = k === "s";
+      if (!paused && !drag) c.off += (c.dir * speed + userVel) * dt;
+      var half = (horiz ? W : H) / 2;
+      for (var i = 0; i < c.tiles.length; i++) {
+        var y = ((i * c.step + c.off) % c.total + c.total) % c.total - c.step;
+        var d = (y + c.h / 2 - half) / half, ad = Math.abs(d), el = c.tiles[i];
+        var op = horiz ? Math.max(0, Math.min(1, (1.15 - ad) * 2.6)) : Math.max(0, Math.min(1, (1.02 - ad) * 3.2));
+        if (op <= .005) { if (el.style.visibility !== "hidden") el.style.visibility = "hidden"; continue; }
+        if (el.style.visibility === "hidden") el.style.visibility = "visible";
+        var sc = 1 - .3 * Math.pow(Math.min(ad, 1.2), 1.6);
+        var wob = Math.sin(t * .9 + y * .012) * 2.2 * ad;
+        el.style.opacity = op.toFixed(3);
+        el.style.transform = horiz
+          ? "translate3d(" + y.toFixed(1) + "px,0,0) perspective(800px) rotateY(" + (d * 34).toFixed(2) +
+            "deg) skewX(" + (-(d * 5 + wob)).toFixed(2) + "deg) scale(" + sc.toFixed(3) + ")"
+          : "translate3d(0," + y.toFixed(1) + "px,0) perspective(800px) rotateX(" + (-d * 34).toFixed(2) +
+            "deg) skewY(" + (d * 5 + wob).toFixed(2) + "deg) scale(" + sc.toFixed(3) + ")";
+        var bl = ad * ad * 3.5;
+        el.style.filter = bl > .4 ? "blur(" + bl.toFixed(1) + "px)" : "none";
+      }
+    });
+  }
+  requestAnimationFrame(frame);
+  scan();
+  setInterval(scan, 30000);
+})();
+
+/* ===== Background layout + lens glare ===== */
+(function () {
+  var cv = document.getElementById("flare"), g = cv.getContext("2d");
+  var W = 0, H = 0, dpr = 1;
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+
+  var bgEl = document.querySelector(".bg-main"), bgImg = new Image();
+  function layoutBg() {
+    var iw = bgImg.naturalWidth, ih = bgImg.naturalHeight;
+    if (!iw) return;
+    var mode = getComputedStyle(document.documentElement).getPropertyValue("--bg-fit").trim();
+    // mobile: the bg image sits in the space below the carousel strip
+    var top = 0, RH = H, isM = window.matchMedia("(max-width:700px)").matches, stripEl = document.getElementById("strip");
+    if (isM && stripEl) { top = Math.max(0, stripEl.getBoundingClientRect().bottom - 8); RH = Math.max(80, H - top); }
+    var sc = mode === "cover" ? Math.max(W / iw, RH / ih) : Math.min(W / iw, RH / ih);
+    var w = iw * sc, h = ih * sc, x = (W - w) / 2, y = top + (RH - h) / 2, m = [], st = bgEl.style;
+    st.left = x + "px"; st.top = y + "px"; st.width = w + "px"; st.height = h + "px";
+    st.right = st.bottom = "auto"; st.backgroundSize = "100% 100%"; st.backgroundPosition = "0 0";
+    // wide, eased side fade: image only reaches full strength in the middle ~30%
+    m.push("linear-gradient(to right,transparent 0,rgba(0,0,0,.08) 8%,rgba(0,0,0,.25) 16%,rgba(0,0,0,.5) 26%,rgba(0,0,0,.8) 36%,#000 46%,#000 54%,rgba(0,0,0,.8) 64%,rgba(0,0,0,.5) 74%,rgba(0,0,0,.25) 84%,rgba(0,0,0,.08) 92%,transparent 100%)");
+    if (y - top > 2 || isM) m.push("linear-gradient(to bottom,transparent 0,#000 22%,#000 78%,transparent 100%)");
+    var v = m.join(",") || "none";
+    st.webkitMaskImage = st.maskImage = v;
+    st.webkitMaskComposite = "source-in"; st.maskComposite = "intersect";
+  }
+  bgImg.onload = layoutBg; bgImg.src = "asset/BG.jpg";
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * dpr | 0; cv.height = H * dpr | 0;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layoutBg();
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  function glow(x, y, r, rgb, a) {
+    var gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, "rgba(" + rgb + "," + a + ")");
+    gr.addColorStop(.4, "rgba(" + rgb + "," + a * .3 + ")");
+    gr.addColorStop(1, "rgba(" + rgb + ",0)");
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill();
+  }
+  function hex(x, y, r, rot) {
+    g.beginPath();
+    for (var k = 0; k <= 6; k++) {
+      var an = rot + k / 6 * 6.2832;
+      k ? g.lineTo(x + Math.cos(an) * r, y + Math.sin(an) * r) : g.moveTo(x + Math.cos(an) * r, y + Math.sin(an) * r);
+    }
+  }
+
+  // ghost elements along the axis from the light through the screen centre
+  var GH = [
+    { k: .35, r: .05, c: "255,190,120", a: .16, h: 0 }, { k: .6, r: .09, c: "120,255,180", a: .12, h: 1 },
+    { k: .85, r: .035, c: "160,200,255", a: .2, h: 0 }, { k: 1.15, r: .13, c: "255,150,200", a: .09, h: 1 },
+    { k: 1.4, r: .06, c: "130,255,200", a: .14, h: 0 }, { k: 1.75, r: .2, c: "255,220,150", a: .06, h: 1 }
+  ];
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (document.hidden) return;
+    var t = reduce ? 3 : now / 1000, U = Math.min(W, H) * 1.7;
+    // light source drifts slowly along the top of the frame
+    var lx = W * (.5 + .38 * Math.sin(t * .09)), ly = H * (.16 + .07 * Math.sin(t * .13 + 1));
+    var pulse = .75 + .25 * Math.sin(t * .9) + .1 * Math.sin(t * 2.3);
+    var glint = Math.pow(Math.max(0, Math.sin(t * .35)), 6);       // occasional bright swell
+    var I = clamp(pulse + glint * .9, .4, 1.8);
+
+    g.clearRect(0, 0, W, H);
+    g.globalAlpha = .45;
+    g.globalCompositeOperation = "lighter";
+
+    // soft bloom + hot core
+    glow(lx, ly, U * .55, "255,225,170", .13 * I);
+    glow(lx, ly, U * .22, "255,240,215", .3 * I);
+    glow(lx, ly, U * .05, "255,255,255", .85 * Math.min(I, 1.2));
+
+    // anamorphic horizontal streak (cool tint)
+    g.save(); g.translate(lx, ly); g.scale(1, .035);
+    glow(0, 0, W * 1.2, "140,220,255", .55 * I);
+    g.restore();
+    g.save(); g.translate(lx, ly); g.scale(1, .012);
+    glow(0, 0, W * .8, "255,255,255", .7 * I);
+    g.restore();
+
+    // starburst rays
+    g.save(); g.translate(lx, ly); g.rotate(t * .03); g.lineCap = "round";
+    for (var k = 0; k < 10; k++) {
+      var an = k / 10 * 6.2832, len = U * (k % 2 ? .22 : .38) * (.8 + .2 * Math.sin(t * 1.1 + k));
+      var gr = g.createLinearGradient(0, 0, Math.cos(an) * len, Math.sin(an) * len);
+      gr.addColorStop(0, "rgba(255,245,225," + .28 * I + ")"); gr.addColorStop(1, "rgba(255,245,225,0)");
+      g.strokeStyle = gr; g.lineWidth = k % 2 ? 1 : 1.8;
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(an) * len, Math.sin(an) * len); g.stroke();
+    }
+    g.restore();
+
+    // lens ghosts mirrored through the centre
+    var cx = W / 2, cy = H / 2, dx = cx - lx, dy = cy - ly;
+    for (k = 0; k < GH.length; k++) {
+      var q = GH[k], gx = lx + dx * q.k, gy = ly + dy * q.k, r = U * q.r;
+      glow(gx, gy, r, q.c, q.a * I);
+      g.strokeStyle = "rgba(" + q.c + "," + q.a * 1.6 * I + ")"; g.lineWidth = 1.2;
+      if (q.h) { hex(gx, gy, r * .8, t * .05 + k); g.stroke(); }
+      else { g.beginPath(); g.arc(gx, gy, r * .9, 0, 6.2832); g.stroke(); }
+    }
+    g.globalCompositeOperation = "source-over"; g.globalAlpha = 1;
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
